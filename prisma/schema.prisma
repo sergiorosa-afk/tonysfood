@@ -1,0 +1,378 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth Models ──────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  role          String    @default("ATTENDANT")
+  unitId        String?
+  unit          Unit?     @relation(fields: [unitId], references: [id])
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── Core Business Models ─────────────────────────────────────────────────────
+
+model Unit {
+  id            String         @id @default(cuid())
+  name          String
+  slug          String         @unique
+  address       String?
+  phone         String?
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  users             User[]
+  customers         Customer[]
+  reservations      Reservation[]
+  queueEntries      QueueEntry[]
+  conversations     Conversation[]
+  catalogItems      CatalogItem[]
+  systemEvents      SystemEvent[]
+  automationRules   AutomationRule[]
+  messageTemplates  MessageTemplate[]
+  integrations      Integration[]
+  webhooks          Webhook[]
+
+  @@map("units")
+}
+
+model Customer {
+  id            String          @id @default(cuid())
+  name          String
+  phone         String?
+  email         String?
+  unitId        String
+  unit          Unit            @relation(fields: [unitId], references: [id])
+  notes         String?         @db.Text
+  segment       String          @default("REGULAR")
+  visitCount    Int             @default(0)
+  lastVisitAt   DateTime?
+  preferences   Json?
+  restrictions  Json?
+  active        Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  tags          CustomerTag[]
+  reservations  Reservation[]
+  queueEntries  QueueEntry[]
+  conversations Conversation[]
+
+  @@map("customers")
+}
+
+model CustomerTag {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tag        String
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, tag])
+  @@map("customer_tags")
+}
+
+model Reservation {
+  id              String                     @id @default(cuid())
+  unitId          String
+  unit            Unit                       @relation(fields: [unitId], references: [id])
+  customerId      String?
+  customer        Customer?                  @relation(fields: [customerId], references: [id])
+  guestName       String
+  guestPhone      String?
+  guestEmail      String?
+  date            DateTime
+  partySize       Int
+  status          String                     @default("PENDING")
+  channel         String                     @default("PHONE")
+  notes           String?                    @db.Text
+  tablePreference String?
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  checkedInAt     DateTime?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  statusHistory   ReservationStatusHistory[]
+
+  @@map("reservations")
+}
+
+model ReservationStatusHistory {
+  id            String            @id @default(cuid())
+  reservationId String
+  reservation   Reservation       @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  status        String
+  notes         String?
+  createdAt     DateTime          @default(now())
+
+  @@map("reservation_status_history")
+}
+
+model QueueEntry {
+  id            String               @id @default(cuid())
+  unitId        String
+  unit          Unit                 @relation(fields: [unitId], references: [id])
+  customerId    String?
+  customer      Customer?            @relation(fields: [customerId], references: [id])
+  guestName     String
+  guestPhone    String?
+  partySize     Int
+  position      Int
+  status        String               @default("WAITING")
+  channel       String               @default("IN_PERSON")
+  notes         String?              @db.Text
+  estimatedWait Int?
+  calledAt      DateTime?
+  seatedAt      DateTime?
+  abandonedAt   DateTime?
+  abandonReason String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  statusHistory QueueStatusHistory[]
+
+  @@map("queue_entries")
+}
+
+model QueueStatusHistory {
+  id           String      @id @default(cuid())
+  queueEntryId String
+  queueEntry   QueueEntry  @relation(fields: [queueEntryId], references: [id], onDelete: Cascade)
+  status       String
+  notes        String?
+  createdAt    DateTime    @default(now())
+
+  @@map("queue_status_history")
+}
+
+model Conversation {
+  id            String             @id @default(cuid())
+  unitId        String
+  unit          Unit               @relation(fields: [unitId], references: [id])
+  customerId    String?
+  customer      Customer?          @relation(fields: [customerId], references: [id])
+  guestName     String?
+  guestPhone    String
+  status        String             @default("OPEN")
+  channel       String             @default("whatsapp")
+  assignedTo    String?
+  lastMessageAt DateTime?
+  closedAt      DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  messages      Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  content        String           @db.Text
+  direction      String
+  senderName     String?
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
+
+  @@map("messages")
+}
+
+model CatalogItem {
+  id             String   @id @default(cuid())
+  unitId         String
+  unit           Unit     @relation(fields: [unitId], references: [id])
+  name           String
+  category       String
+  description    String?  @db.Text
+  price          Float?
+  tags           Json?
+  allergens      Json?
+  targetSegments Json?    // Array de segment name strings — null = todos os segmentos
+  active         Boolean  @default(true)
+  featured       Boolean  @default(false)
+  imageUrl       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("catalog_items")
+}
+
+model Segment {
+  id        String   @id @default(cuid())
+  name      String   // internal key: "VIP", "REGULAR", "NEW", "INACTIVE", or custom
+  label     String   // display name: "VIP", "Regular", "Novo", "Inativo"
+  color     String   @default("gray") // color key: "amber", "blue", "green", "slate", "purple", "red", "orange"
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([name])
+  @@map("segments")
+}
+
+model SystemEvent {
+  id          String    @id @default(cuid())
+  unitId      String?
+  unit        Unit?     @relation(fields: [unitId], references: [id])
+  eventType   String
+  entityType  String?
+  entityId    String?
+  payload     Json?
+  occurredAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  @@map("system_events")
+}
+
+model AutomationRule {
+  id             String          @id @default(cuid())
+  unitId         String
+  unit           Unit            @relation(fields: [unitId], references: [id])
+  name           String
+  description    String?         @db.Text
+  active         Boolean         @default(true)
+  triggerEvent   String
+  conditions     Json?
+  actions        Json
+  executionCount Int             @default(0)
+  lastExecutedAt DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  logs           AutomationLog[]
+
+  @@map("automation_rules")
+}
+
+model AutomationLog {
+  id         String         @id @default(cuid())
+  ruleId     String
+  rule       AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  entityType String?
+  entityId   String?
+  status     String
+  result     Json?
+  error      String?        @db.Text
+  executedAt DateTime       @default(now())
+
+  @@map("automation_logs")
+}
+
+model MessageTemplate {
+  id        String   @id @default(cuid())
+  unitId    String
+  unit      Unit     @relation(fields: [unitId], references: [id])
+  name      String
+  category  String   @default("general")
+  body      String   @db.Text
+  variables Json?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("message_templates")
+}
+
+model Integration {
+  id        String   @id @default(cuid())
+  unitId    String
+  unit      Unit     @relation(fields: [unitId], references: [id])
+  type      String
+  name      String
+  config    Json
+  active    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([unitId, type])
+  @@map("integrations")
+}
+
+model Webhook {
+  id           String       @id @default(cuid())
+  unitId       String
+  unit         Unit         @relation(fields: [unitId], references: [id])
+  name         String
+  url          String       @db.Text
+  secret       String?
+  events       Json
+  active       Boolean      @default(true)
+  lastCalledAt DateTime?
+  successCount Int          @default(0)
+  failureCount Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  logs         WebhookLog[]
+
+  @@map("webhooks")
+}
+
+model WebhookLog {
+  id         String   @id @default(cuid())
+  webhookId  String
+  webhook    Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  eventType  String
+  payload    Json?
+  statusCode Int?
+  response   String?  @db.Text
+  durationMs Int?
+  success    Boolean
+  createdAt  DateTime @default(now())
+
+  @@map("webhook_logs")
+}
+
+
