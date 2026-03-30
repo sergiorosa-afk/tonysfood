@@ -21,5 +21,5 @@ export function phoneVariants(phone: string): string[] {
   if (!digits) return []
   const normalized = normalizePhone(digits)
   const withoutPrefix = normalized.startsWith('55') ? normalized.slice(2) : normalized
-  return [...new Set([normalized, withoutPrefix, `55${withoutPrefix}`])]
+  return Array.from(new Set([normalized, withoutPrefix, `55${withoutPrefix}`]))
 }
