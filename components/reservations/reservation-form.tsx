@@ -1,7 +1,8 @@
 'use client'
 
+import { useState, useEffect, useRef } from 'react'
 import { useFormState, useFormStatus } from 'react-dom'
-import { Loader2 } from 'lucide-react'
+import { Loader2, UserCheck, UserPlus } from 'lucide-react'
 import type { ReservationFormState } from '@/lib/actions/reservations'
 
 function SubmitButton({ label }: { label: string }) {
@@ -16,6 +17,19 @@ function SubmitButton({ label }: { label: string }) {
       {pending ? 'Salvando...' : label}
     </button>
   )
+}
+
+type LookupState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'found'; customer: { name: string; segment: string; visitCount: number } }
+  | { status: 'new' }
+
+const SEGMENT_LABEL: Record<string, string> = {
+  VIP: 'VIP',
+  REGULAR: 'Regular',
+  NEW: 'Novo',
+  INACTIVE: 'Inativo',
 }
 
 interface ReservationFormProps {
@@ -42,6 +56,35 @@ const errorClass = "text-xs text-red-500 mt-1"
 
 export function ReservationForm({ action, defaultValues = {}, unitId, submitLabel = 'Salvar Reserva' }: ReservationFormProps) {
   const [state, formAction] = useFormState(action, {})
+  const [phone, setPhone] = useState(defaultValues.guestPhone ?? '')
+  const [lookup, setLookup] = useState<LookupState>({ status: 'idle' })
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const digits = phone.replace(/\D/g, '')
+    if (digits.length < 10) {
+      setLookup({ status: 'idle' })
+      return
+    }
+
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      setLookup({ status: 'loading' })
+      try {
+        const res = await fetch(`/api/customers/lookup?phone=${encodeURIComponent(digits)}&unitId=${unitId}`)
+        const data = await res.json()
+        if (data.found) {
+          setLookup({ status: 'found', customer: data.customer })
+        } else {
+          setLookup({ status: 'new' })
+        }
+      } catch {
+        setLookup({ status: 'idle' })
+      }
+    }, 500)
+
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [phone, unitId])
 
   return (
     <form action={formAction} className="space-y-6">
@@ -72,10 +115,30 @@ export function ReservationForm({ action, defaultValues = {}, unitId, submitLabe
             <label className={labelClass}>Telefone / WhatsApp</label>
             <input
               name="guestPhone"
-              defaultValue={defaultValues.guestPhone}
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
               placeholder="(11) 99999-0000"
               className={inputClass}
             />
+            {/* Indicador de cliente */}
+            {lookup.status === 'loading' && (
+              <p className="flex items-center gap-1.5 text-xs text-slate-400 mt-1.5">
+                <Loader2 className="w-3 h-3 animate-spin" /> Verificando...
+              </p>
+            )}
+            {lookup.status === 'found' && (
+              <p className="flex items-center gap-1.5 text-xs text-green-700 mt-1.5 font-medium">
+                <UserCheck className="w-3.5 h-3.5" />
+                Cliente cadastrado — {lookup.customer.name} · {SEGMENT_LABEL[lookup.customer.segment] ?? lookup.customer.segment}
+                {lookup.customer.visitCount > 0 && ` · ${lookup.customer.visitCount} visita${lookup.customer.visitCount !== 1 ? 's' : ''}`}
+              </p>
+            )}
+            {lookup.status === 'new' && (
+              <p className="flex items-center gap-1.5 text-xs text-blue-600 mt-1.5 font-medium">
+                <UserPlus className="w-3.5 h-3.5" />
+                Cliente novo — será cadastrado automaticamente como Novo
+              </p>
+            )}
           </div>
           <div>
             <label className={labelClass}>E-mail</label>

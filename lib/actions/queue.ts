@@ -7,6 +7,7 @@ import { emitEvent } from '@/lib/events'
 import { auth } from '@/lib/auth'
 import { getNextPosition } from '@/lib/queries/queue'
 import { getWaWebStateForUnit, sendWaWebMessage } from '@/lib/whatsapp-web/service'
+import { normalizePhone, phoneVariants } from '@/lib/utils/phone'
 
 const joinSchema = z.object({
   guestName: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
@@ -41,33 +42,51 @@ export async function joinQueue(
   // ETA: ~15 min per group ahead
   const estimatedWait = position * 15
 
+  // Normaliza telefone para formato WhatsApp (55XXNUMERO)
+  if (rest.guestPhone) {
+    rest.guestPhone = normalizePhone(rest.guestPhone)
+  }
+
   try {
+    // Find-or-create cliente se telefone informado
+    let customerSegment: string | null = null
+    let customerId: string | null = null
+    if (rest.guestPhone) {
+      const variants = phoneVariants(rest.guestPhone)
+      const existing = await prisma.customer.findFirst({
+        where: { unitId, phone: { in: variants }, active: true },
+        select: { id: true, segment: true },
+      })
+      if (existing) {
+        customerId = existing.id
+        customerSegment = existing.segment
+      } else {
+        const created = await prisma.customer.create({
+          data: {
+            name: rest.guestName,
+            phone: rest.guestPhone,
+            unitId,
+            segment: 'NEW',
+          },
+          select: { id: true, segment: true },
+        })
+        customerId = created.id
+        customerSegment = created.segment
+        revalidatePath('/clientes')
+      }
+    }
+
     const entry = await prisma.queueEntry.create({
       data: {
         ...rest,
         unitId,
         position,
         estimatedWait,
+        customerId,
         status: 'WAITING',
         statusHistory: { create: { status: 'WAITING', notes: 'Entrou na fila' } },
       },
     })
-
-    // Fetch customer segment before emitting (used in automation conditions + SEND_CATALOG_OFFERS)
-    let customerSegment: string | null = null
-    let customerId: string | null = null
-    if (rest.guestPhone) {
-      const phone = rest.guestPhone.replace(/\D/g, '')
-      const customer = await prisma.customer.findFirst({
-        where: {
-          unitId,
-          phone: { in: [phone, `55${phone}`, phone.replace(/^55/, '')] },
-        },
-        select: { id: true, segment: true },
-      })
-      customerSegment = customer?.segment ?? null
-      customerId = customer?.id ?? null
-    }
 
     await emitEvent({
       unitId,

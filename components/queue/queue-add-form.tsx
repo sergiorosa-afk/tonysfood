@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useFormState, useFormStatus } from 'react-dom'
-import { X, Loader2, UserPlus } from 'lucide-react'
+import { X, Loader2, UserPlus, UserCheck } from 'lucide-react'
 import { joinQueue, QueueFormState } from '@/lib/actions/queue'
 
 function SubmitButton() {
@@ -20,6 +20,19 @@ function SubmitButton() {
   )
 }
 
+type LookupState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'found'; customer: { name: string; segment: string; visitCount: number } }
+  | { status: 'new' }
+
+const SEGMENT_LABEL: Record<string, string> = {
+  VIP: 'VIP',
+  REGULAR: 'Regular',
+  NEW: 'Novo',
+  INACTIVE: 'Inativo',
+}
+
 const inputClass = "w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all"
 const labelClass = "block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5"
 
@@ -32,13 +45,44 @@ interface QueueAddFormProps {
 export function QueueAddForm({ unitId, open, onClose }: QueueAddFormProps) {
   const [state, formAction] = useFormState<QueueFormState, FormData>(joinQueue, {})
   const formRef = useRef<HTMLFormElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [phone, setPhone] = useState('')
+  const [lookup, setLookup] = useState<LookupState>({ status: 'idle' })
 
   useEffect(() => {
     if (state.success) {
       formRef.current?.reset()
+      setPhone('')
+      setLookup({ status: 'idle' })
       onClose()
     }
   }, [state.success, onClose])
+
+  useEffect(() => {
+    const digits = phone.replace(/\D/g, '')
+    if (digits.length < 10) {
+      setLookup({ status: 'idle' })
+      return
+    }
+
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      setLookup({ status: 'loading' })
+      try {
+        const res = await fetch(`/api/customers/lookup?phone=${encodeURIComponent(digits)}&unitId=${unitId}`)
+        const data = await res.json()
+        if (data.found) {
+          setLookup({ status: 'found', customer: data.customer })
+        } else {
+          setLookup({ status: 'new' })
+        }
+      } catch {
+        setLookup({ status: 'idle' })
+      }
+    }, 500)
+
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [phone, unitId])
 
   if (!open) return null
 
@@ -89,7 +133,32 @@ export function QueueAddForm({ unitId, open, onClose }: QueueAddFormProps) {
 
           <div>
             <label className={labelClass}>Telefone / WhatsApp</label>
-            <input name="guestPhone" placeholder="(11) 99999-0000" className={inputClass} />
+            <input
+              name="guestPhone"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="(11) 99999-0000"
+              className={inputClass}
+            />
+            {/* Indicador de cliente */}
+            {lookup.status === 'loading' && (
+              <p className="flex items-center gap-1.5 text-xs text-slate-400 mt-1.5">
+                <Loader2 className="w-3 h-3 animate-spin" /> Verificando...
+              </p>
+            )}
+            {lookup.status === 'found' && (
+              <p className="flex items-center gap-1.5 text-xs text-green-700 mt-1.5 font-medium">
+                <UserCheck className="w-3.5 h-3.5" />
+                Cliente cadastrado — {lookup.customer.name} · {SEGMENT_LABEL[lookup.customer.segment] ?? lookup.customer.segment}
+                {lookup.customer.visitCount > 0 && ` · ${lookup.customer.visitCount} visita${lookup.customer.visitCount !== 1 ? 's' : ''}`}
+              </p>
+            )}
+            {lookup.status === 'new' && (
+              <p className="flex items-center gap-1.5 text-xs text-blue-600 mt-1.5 font-medium">
+                <UserPlus className="w-3.5 h-3.5" />
+                Cliente novo — será cadastrado automaticamente como Novo
+              </p>
+            )}
           </div>
 
           <div>

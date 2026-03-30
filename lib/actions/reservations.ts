@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { emitEvent } from '@/lib/events'
 import { auth } from '@/lib/auth'
+import { normalizePhone, phoneVariants } from '@/lib/utils/phone'
 
 const reservationSchema = z.object({
   guestName: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
@@ -44,11 +45,42 @@ export async function createReservation(
   const { date, time, ...rest } = parsed.data
   const reservationDate = new Date(`${date}T${time}:00`)
 
+  // Normaliza telefone para formato WhatsApp (55XXNUMERO)
+  if (rest.guestPhone) {
+    rest.guestPhone = normalizePhone(rest.guestPhone)
+  }
+
   try {
+    // Find-or-create cliente se telefone informado
+    let customerId: string | null = null
+    if (rest.guestPhone) {
+      const variants = phoneVariants(rest.guestPhone)
+      const existing = await prisma.customer.findFirst({
+        where: { unitId: rest.unitId, phone: { in: variants }, active: true },
+        select: { id: true },
+      })
+      if (existing) {
+        customerId = existing.id
+      } else {
+        const created = await prisma.customer.create({
+          data: {
+            name: rest.guestName,
+            phone: rest.guestPhone,
+            unitId: rest.unitId,
+            segment: 'NEW',
+          },
+          select: { id: true },
+        })
+        customerId = created.id
+        revalidatePath('/clientes')
+      }
+    }
+
     const reservation = await prisma.reservation.create({
       data: {
         ...rest,
         date: reservationDate,
+        customerId,
         statusHistory: {
           create: { status: parsed.data.status, notes: 'Reserva criada' },
         },
