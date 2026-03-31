@@ -88,20 +88,27 @@ export async function joinQueue(
       },
     })
 
-    await emitEvent({
-      unitId,
-      eventType: 'QUEUE_JOINED',
-      entityType: 'queue_entry',
-      entityId: entry.id,
-      payload: {
-        guestName: rest.guestName,
-        partySize: rest.partySize,
-        position,
-        guestPhone: rest.guestPhone ?? null,
-        segment: customerSegment,
-        customerId,
-      },
-    })
+    revalidatePath('/fila')
+    revalidatePath('/dashboard')
+    revalidatePath('/clientes')
+
+    // emitEvent isolado — falha não impede o fluxo principal
+    try {
+      await emitEvent({
+        unitId,
+        eventType: 'QUEUE_JOINED',
+        entityType: 'queue_entry',
+        entityId: entry.id,
+        payload: {
+          guestName: rest.guestName,
+          partySize: rest.partySize,
+          position,
+          guestPhone: rest.guestPhone ?? null,
+          segment: customerSegment,
+          customerId,
+        },
+      })
+    } catch { /* evento não crítico */ }
 
     // Send welcome WhatsApp message if connected and guest has phone
     if (rest.guestPhone) {
@@ -128,9 +135,6 @@ export async function joinQueue(
         // Catalog offers now handled by the automation engine via SEND_CATALOG_OFFERS action
       }
     }
-
-    revalidatePath('/fila')
-    revalidatePath('/dashboard')
   } catch {
     return { message: 'Erro ao entrar na fila. Tente novamente.', success: false }
   }

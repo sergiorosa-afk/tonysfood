@@ -87,15 +87,20 @@ export async function createReservation(
       },
     })
 
-    await emitEvent({
-      unitId: rest.unitId,
-      eventType: 'reservation.created',
-      entityType: 'reservation',
-      entityId: reservation.id,
-      payload: { guestName: rest.guestName, partySize: rest.partySize, date: reservationDate },
-    })
-
     revalidatePath('/reservas')
+    revalidatePath('/clientes')
+
+    // emitEvent isolado — falha não impede o fluxo principal
+    try {
+      await emitEvent({
+        unitId: rest.unitId,
+        eventType: 'reservation.created',
+        entityType: 'reservation',
+        entityId: reservation.id,
+        payload: { guestName: rest.guestName, partySize: rest.partySize, date: reservationDate },
+      })
+    } catch { /* evento não crítico */ }
+
   } catch (error) {
     return { message: 'Erro ao criar reserva. Tente novamente.', success: false }
   }
