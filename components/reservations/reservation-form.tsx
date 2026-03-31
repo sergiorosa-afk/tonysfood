@@ -5,16 +5,17 @@ import { useFormState, useFormStatus } from 'react-dom'
 import { Loader2, UserCheck, UserPlus } from 'lucide-react'
 import type { ReservationFormState } from '@/lib/actions/reservations'
 
-function SubmitButton({ label }: { label: string }) {
+function SubmitButton({ label, submitting }: { label: string; submitting: boolean }) {
   const { pending } = useFormStatus()
+  const blocked = pending || submitting
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={blocked}
       className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
     >
-      {pending && <Loader2 className="w-4 h-4 animate-spin" />}
-      {pending ? 'Salvando...' : label}
+      {blocked && <Loader2 className="w-4 h-4 animate-spin" />}
+      {blocked ? 'Salvando...' : label}
     </button>
   )
 }
@@ -58,7 +59,13 @@ export function ReservationForm({ action, defaultValues = {}, unitId, submitLabe
   const [state, formAction] = useFormState(action, {})
   const [phone, setPhone] = useState(defaultValues.guestPhone ?? '')
   const [lookup, setLookup] = useState<LookupState>({ status: 'idle' })
+  const [submitting, setSubmitting] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Reabilita botão se servidor retornar erro
+  useEffect(() => {
+    if (state.message && !state.success) setSubmitting(false)
+  }, [state])
 
   useEffect(() => {
     const digits = phone.replace(/\D/g, '')
@@ -87,7 +94,7 @@ export function ReservationForm({ action, defaultValues = {}, unitId, submitLabe
   }, [phone, unitId])
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} onSubmit={() => setSubmitting(true)} className="space-y-6">
       <input type="hidden" name="unitId" value={unitId} />
 
       {state.message && !state.success && (
@@ -237,7 +244,7 @@ export function ReservationForm({ action, defaultValues = {}, unitId, submitLabe
       </div>
 
       <div className="flex items-center gap-3">
-        <SubmitButton label={submitLabel} />
+        <SubmitButton label={submitLabel} submitting={submitting} />
         <a
           href="/reservas"
           className="px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors"

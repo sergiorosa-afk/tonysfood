@@ -5,17 +5,17 @@ import { useFormState, useFormStatus } from 'react-dom'
 import { X, Loader2, UserPlus, UserCheck } from 'lucide-react'
 import { joinQueue, QueueFormState } from '@/lib/actions/queue'
 
-function SubmitButton() {
+function SubmitButton({ submitting }: { submitting: boolean }) {
   const { pending } = useFormStatus()
+  const blocked = pending || submitting
   return (
     <button
       type="submit"
-      form="queue-add-form"
-      disabled={pending}
-      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors disabled:opacity-60"
+      disabled={blocked}
+      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
     >
-      {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-      {pending ? 'Adicionando...' : 'Adicionar à Fila'}
+      {blocked ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+      {blocked ? 'Adicionando...' : 'Adicionar à Fila'}
     </button>
   )
 }
@@ -48,15 +48,19 @@ export function QueueAddForm({ unitId, open, onClose }: QueueAddFormProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [phone, setPhone] = useState('')
   const [lookup, setLookup] = useState<LookupState>({ status: 'idle' })
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (state.success) {
       formRef.current?.reset()
       setPhone('')
       setLookup({ status: 'idle' })
+      setSubmitting(false)
       onClose()
+    } else if (state.message && !state.success) {
+      setSubmitting(false)
     }
-  }, [state.success, onClose])
+  }, [state, onClose])
 
   useEffect(() => {
     const digits = phone.replace(/\D/g, '')
@@ -116,7 +120,7 @@ export function QueueAddForm({ unitId, open, onClose }: QueueAddFormProps) {
         </div>
 
         {/* Form */}
-        <form id="queue-add-form" ref={formRef} action={formAction} className="flex-1 overflow-y-auto p-6 space-y-4">
+        <form ref={formRef} action={formAction} onSubmit={() => setSubmitting(true)} className="flex-1 overflow-y-auto p-6 space-y-4 flex flex-col">
           <input type="hidden" name="unitId" value={unitId} />
 
           {state.message && !state.success && (
@@ -196,18 +200,19 @@ export function QueueAddForm({ unitId, open, onClose }: QueueAddFormProps) {
               className={`${inputClass} resize-none`}
             />
           </div>
-        </form>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
-          <SubmitButton />
-          <button
-            onClick={onClose}
-            className="px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            Cancelar
-          </button>
-        </div>
+          {/* Footer dentro do form para useFormStatus funcionar */}
+          <div className="mt-auto pt-4 border-t border-slate-100 flex gap-3">
+            <SubmitButton submitting={submitting} />
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
       </div>
     </>
   )
