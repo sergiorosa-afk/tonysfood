@@ -375,4 +375,19 @@ model WebhookLog {
   @@map("webhook_logs")
 }
 
+model AiConversation {
+  id        String   @id @default(cuid())
+  unitId    String
+  phone     String
+  status    String   @default("ACTIVE") // ACTIVE, COMPLETED, EXPIRED
+  history   Json                         // [{role: "user"|"model", content: string}]
+  collected Json                         // {name, date, time, partySize, notes}
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([unitId, phone])
+  @@map("ai_conversations")
+}
+
 
