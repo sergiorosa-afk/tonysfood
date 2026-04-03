@@ -84,10 +84,11 @@ model Unit {
   conversations     Conversation[]
   catalogItems      CatalogItem[]
   systemEvents      SystemEvent[]
-  automationRules   AutomationRule[]
-  messageTemplates  MessageTemplate[]
-  integrations      Integration[]
-  webhooks          Webhook[]
+  automationRules    AutomationRule[]
+  messageTemplates   MessageTemplate[]
+  integrations       Integration[]
+  webhooks           Webhook[]
+  reservationBlocks  ReservationBlock[]
 
   @@map("units")
 }
@@ -373,6 +374,33 @@ model WebhookLog {
   createdAt  DateTime @default(now())
 
   @@map("webhook_logs")
+}
+
+model ReservationBlock {
+  id        String    @id @default(cuid())
+  unitId    String
+  unit      Unit      @relation(fields: [unitId], references: [id])
+  label     String?                        // descrição para o admin
+
+  // O que bloquear
+  allDay    Boolean   @default(false)      // bloqueia o dia todo
+  period    String?                        // 'morning'|'lunch'|'afternoon'|'evening'
+  startTime String?                        // HH:MM (intervalo customizado)
+  endTime   String?                        // HH:MM
+
+  // Quando
+  date      DateTime?                      // data específica (once) ou referência (biweekly/monthly)
+  weekDay   Int?                           // 0=Dom..6=Sáb (weekly/biweekly)
+
+  // Frequência
+  frequency String    @default("once")     // 'once'|'daily'|'weekly'|'biweekly'|'monthly'
+
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([unitId])
+  @@map("reservation_blocks")
 }
 
 model AiConversation {

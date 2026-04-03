@@ -12,6 +12,7 @@ import {
   Zap,
   Plug,
   ShieldCheck,
+  CalendarOff,
 } from 'lucide-react'
 import { cn, getInitials, roleLabels } from '@/lib/utils'
 
@@ -27,7 +28,8 @@ const navItems = [
 ]
 
 const adminItems = [
-  { label: 'Admin', href: '/admin', icon: ShieldCheck },
+  { label: 'Bloqueios', href: '/bloqueios', icon: CalendarOff },
+  { label: 'Admin',     href: '/admin',     icon: ShieldCheck },
 ]
 
 interface SidebarProps {

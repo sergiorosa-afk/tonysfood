@@ -6,6 +6,7 @@
 import { prisma } from '@/lib/db'
 import { processWithGemini, CollectedData, HistoryMessage } from './gemini-reservation'
 import { normalizePhone, phoneVariants } from '@/lib/utils/phone'
+import { isDateTimeBlocked } from '@/lib/queries/blocks'
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000
 
@@ -72,6 +73,26 @@ export async function processAiMessage(
       console.log('[AI] readyToBook — dados:', JSON.stringify({ name, date, time, partySize }))
 
       if (name && date && time && partySize) {
+        // Verifica bloqueio antes de tudo
+        const blockCheck = await isDateTimeBlocked(unitId, date, time).catch(() => ({ blocked: false }))
+        if (blockCheck.blocked) {
+          const reason = (blockCheck as any).reason || 'esse horário'
+          finalReply = `Desculpe, não conseguimos fazer a reserva para essa data e horário pois ${reason}. Por favor, escolha outro dia ou horário disponível.`
+
+          // Mantém a sessão ativa para o cliente tentar outro horário
+          try {
+            await prisma.aiConversation.update({
+              where: { id: aiConv.id },
+              data: {
+                history: toJson([...history, { role: 'user', content: message }, { role: 'model', content: finalReply }]),
+                expiresAt: new Date(Date.now() + SESSION_TIMEOUT_MS),
+              },
+            })
+          } catch { /* não crítico */ }
+
+          return finalReply
+        }
+
         let reservationCreated = false
 
         // 1. Cria a reserva (operação principal)
