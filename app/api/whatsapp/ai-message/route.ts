@@ -13,9 +13,13 @@ function toJson(v: unknown) {
 }
 
 export async function POST(req: NextRequest) {
+  console.log('[AI-Route] recebida requisição POST /api/whatsapp/ai-message')
+
   // Proteção: apenas o worker interno pode chamar este endpoint
   const secret = req.headers.get('x-worker-secret')
+  console.log('[AI-Route] secret presente:', !!secret)
   if (!secret || secret !== process.env.NEXTAUTH_SECRET) {
+    console.log('[AI-Route] UNAUTHORIZED — secret não bate')
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
