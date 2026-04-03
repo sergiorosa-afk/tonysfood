@@ -4,7 +4,7 @@
  */
 
 const GEMINI_API_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
 
 const SYSTEM_PROMPT = `Você é o assistente virtual de reservas do restaurante Tony's Food.
 Seu ÚNICO objetivo é coletar as informações necessárias para fazer uma reserva de mesa e confirmá-la com o cliente.
