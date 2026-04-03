@@ -32,7 +32,18 @@ export async function getConversations(filters: InboxFilters = {}) {
         take: 1,
       },
     },
-    orderBy: [{ status: 'asc' }, { lastMessageAt: 'desc' }, { createdAt: 'desc' }],
+    orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
+  }).then((convs) => {
+    // Ordena: OPEN primeiro, PENDING segundo, demais depois — dentro de cada grupo por data
+    const priority: Record<string, number> = { OPEN: 0, PENDING: 1 }
+    return convs.sort((a, b) => {
+      const pa = priority[a.status] ?? 2
+      const pb = priority[b.status] ?? 2
+      if (pa !== pb) return pa - pb
+      const ta = new Date(a.lastMessageAt ?? a.createdAt).getTime()
+      const tb = new Date(b.lastMessageAt ?? b.createdAt).getTime()
+      return tb - ta
+    })
   })
 }
 
