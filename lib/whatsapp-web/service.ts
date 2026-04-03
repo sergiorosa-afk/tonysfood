@@ -116,7 +116,7 @@ export function startWaWebConnection(unitId: string): void {
       const { processAiMessage } = await import('@/lib/ai/process-ai-message')
       const reply = await processAiMessage(msg.unitId, msg.phone, msg.message)
       if (reply) {
-        child.send({ action: 'ai-reply', phone: msg.phone, reply })
+        child.send({ action: 'ai-reply', phone: msg.phone, remoteJid: msg.remoteJid, reply })
       }
     } catch (err) {
       console.error('[WaWeb] AI IPC error:', err)
