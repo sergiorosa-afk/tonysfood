@@ -7,6 +7,11 @@ export const dynamic = 'force-dynamic'
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutos
 
+// Prisma exige cast para campos Json — não aceita tipos customizados diretamente
+function toJson(v: unknown) {
+  return v as any // eslint-disable-line @typescript-eslint/no-explicit-any
+}
+
 export async function POST(req: NextRequest) {
   // Proteção: apenas o worker interno pode chamar este endpoint
   const secret = req.headers.get('x-worker-secret')
@@ -48,6 +53,14 @@ export async function POST(req: NextRequest) {
       aiConv = null
     }
 
+    const emptyCollected: CollectedData = {
+      name: null,
+      date: null,
+      time: null,
+      partySize: null,
+      notes: null,
+    }
+
     // Sem sessão ativa → inicia nova
     if (!aiConv) {
       aiConv = await prisma.aiConversation.create({
@@ -55,14 +68,8 @@ export async function POST(req: NextRequest) {
           unitId,
           phone: normalizedPhone,
           status: 'ACTIVE',
-          history: [] as HistoryMessage[],
-          collected: {
-            name: null,
-            date: null,
-            time: null,
-            partySize: null,
-            notes: null,
-          } as CollectedData,
+          history: toJson([]),
+          collected: toJson(emptyCollected),
           expiresAt: new Date(Date.now() + SESSION_TIMEOUT_MS),
         },
       })
@@ -87,7 +94,11 @@ export async function POST(req: NextRequest) {
       // Cliente não quer reserva
       await prisma.aiConversation.update({
         where: { id: aiConv.id },
-        data: { status: 'EXPIRED', history: newHistory, collected: gemini.collected },
+        data: {
+          status: 'EXPIRED',
+          history: toJson(newHistory),
+          collected: toJson(gemini.collected),
+        },
       })
     } else if (gemini.readyToBook) {
       // Todos os dados coletados e confirmados — cria a reserva
@@ -139,18 +150,21 @@ export async function POST(req: NextRequest) {
 
           await prisma.aiConversation.update({
             where: { id: aiConv.id },
-            data: { status: 'COMPLETED', history: newHistory, collected: gemini.collected },
+            data: {
+              status: 'COMPLETED',
+              history: toJson(newHistory),
+              collected: toJson(gemini.collected),
+            },
           })
         } catch (err) {
           console.error('[AI Reservation] Erro ao criar reserva:', err)
           finalReply =
             'Desculpe, ocorreu um problema ao registrar sua reserva. Por favor, tente novamente ou entre em contato conosco.'
-          // Mantém sessão ativa para nova tentativa
           await prisma.aiConversation.update({
             where: { id: aiConv.id },
             data: {
-              history: newHistory,
-              collected: gemini.collected,
+              history: toJson(newHistory),
+              collected: toJson(gemini.collected),
               expiresAt: new Date(Date.now() + SESSION_TIMEOUT_MS),
             },
           })
@@ -161,8 +175,8 @@ export async function POST(req: NextRequest) {
       await prisma.aiConversation.update({
         where: { id: aiConv.id },
         data: {
-          history: newHistory,
-          collected: gemini.collected,
+          history: toJson(newHistory),
+          collected: toJson(gemini.collected),
           expiresAt: new Date(Date.now() + SESSION_TIMEOUT_MS),
         },
       })
