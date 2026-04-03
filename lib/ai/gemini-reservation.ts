@@ -78,8 +78,13 @@ export async function processWithGemini(
     { role: 'user', parts: [{ text: currentMessage }] },
   ]
 
+  // Usa getUTC* para retornar a data do servidor Railway (UTC) sem distorção
+  const now = new Date()
+  const todayStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`
+
   const systemWithContext =
     SYSTEM_PROMPT +
+    `\n\nData de hoje no servidor: ${todayStr} (ano atual: ${now.getUTCFullYear()}). Sempre use o ano completo (4 dígitos) ao preencher o campo "date". Se o cliente não informar o ano, use ${now.getUTCFullYear()}.` +
     `\n\nDados já coletados até agora: ${JSON.stringify(alreadyCollected)}`
 
   const body = {

@@ -76,9 +76,14 @@ export async function processAiMessage(
 
         // 1. Cria a reserva (operação principal)
         try {
-          const [year, month, day] = date.split('-').map(Number)
+          const parts = date.split('-').map(Number)
+          const currentYear = new Date().getUTCFullYear()
+          // Se o Gemini retornou data sem ano (MM-DD) ou com ano errado, usa o ano atual
+          const [year, month, day] = parts.length === 3
+            ? [parts[0] < currentYear ? currentYear : parts[0], parts[1], parts[2]]
+            : [currentYear, parts[0], parts[1]]
           const [hour, minute] = time.split(':').map(Number)
-          const reservationDate = new Date(year, month - 1, day, hour, minute)
+          const reservationDate = new Date(Date.UTC(year, month - 1, day, hour, minute))
 
           let customer = await prisma.customer.findFirst({ where: { unitId, phone: { in: variants } } })
           if (!customer) {
