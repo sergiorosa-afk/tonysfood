@@ -134,30 +134,7 @@ export async function processAiMessage(
       })
     }
 
-    // Salva resposta no Inbox
-    try {
-      const conversation = await prisma.conversation.findFirst({
-        where: { unitId, guestPhone: { in: variants }, status: { in: ['OPEN', 'PENDING'] } },
-        orderBy: { lastMessageAt: 'desc' },
-      })
-      if (conversation) {
-        await prisma.message.create({
-          data: {
-            conversationId: conversation.id,
-            content: finalReply,
-            direction: 'OUTBOUND',
-            senderName: "Tony's Food IA",
-          },
-        })
-        await prisma.conversation.update({
-          where: { id: conversation.id },
-          data: { lastMessageAt: new Date() },
-        })
-      }
-    } catch (err) {
-      console.error('[AI] Erro ao salvar mensagem outbound:', err)
-    }
-
+    // Inbox é salvo pelo worker APÓS confirmação de envio WhatsApp
     return finalReply
   } catch (err) {
     console.error('[AI] Erro geral:', err)
