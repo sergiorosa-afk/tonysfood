@@ -109,6 +109,20 @@ export function startWaWebConnection(unitId: string): void {
   child.stdout?.on('data', (d: Buffer) => console.log('[WaWeb]', d.toString().trimEnd()))
   child.stderr?.on('data', (d: Buffer) => console.error('[WaWeb]', d.toString().trimEnd()))
 
+  // IPC: worker pede processamento de mensagem pela IA
+  child.on('message', async (msg: any) => {
+    if (!msg || msg.action !== 'ai-process') return
+    try {
+      const { processAiMessage } = await import('@/lib/ai/process-ai-message')
+      const reply = await processAiMessage(msg.unitId, msg.phone, msg.message)
+      if (reply) {
+        child.send({ action: 'ai-reply', phone: msg.phone, reply })
+      }
+    } catch (err) {
+      console.error('[WaWeb] AI IPC error:', err)
+    }
+  })
+
   child.on('exit', (code) => {
     console.log('[WaWeb] worker exited with code', code)
     const p = getProc()
