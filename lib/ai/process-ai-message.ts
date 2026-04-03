@@ -69,15 +69,18 @@ export async function processAiMessage(
       })
     } else if (gemini.readyToBook) {
       const { name, date, time, partySize, notes } = gemini.collected
+      console.log('[AI] readyToBook — dados:', JSON.stringify({ name, date, time, partySize }))
 
       if (name && date && time && partySize) {
+        let reservationCreated = false
+
+        // 1. Cria a reserva (operação principal)
         try {
           const [year, month, day] = date.split('-').map(Number)
           const [hour, minute] = time.split(':').map(Number)
           const reservationDate = new Date(year, month - 1, day, hour, minute)
 
           let customer = await prisma.customer.findFirst({ where: { unitId, phone: { in: variants } } })
-
           if (!customer) {
             customer = await prisma.customer.create({
               data: { unitId, name, phone: normalizedPhone, segment: 'NEW' },
@@ -97,22 +100,40 @@ export async function processAiMessage(
               notes: notes ?? null,
             },
           })
+          console.log('[AI] Reserva criada:', reservation.id)
+          reservationCreated = true
 
-          await prisma.reservationStatusHistory.create({
+          // Histórico de status (não-crítico)
+          prisma.reservationStatusHistory.create({
             data: {
               reservationId: reservation.id,
               status: 'PENDING',
               notes: 'Reserva criada pelo assistente virtual via WhatsApp',
             },
-          })
-
-          await prisma.aiConversation.update({
-            where: { id: aiConv.id },
-            data: { status: 'COMPLETED', history: toJson(newHistory), collected: toJson(gemini.collected) },
-          })
+          }).catch((e) => console.error('[AI] Erro ao criar statusHistory:', e))
         } catch (err) {
           console.error('[AI] Erro ao criar reserva:', err)
-          finalReply = 'Desculpe, ocorreu um problema ao registrar sua reserva. Por favor, tente novamente.'
+          finalReply = 'Desculpe, ocorreu um problema ao registrar sua reserva. Por favor, tente novamente em instantes.'
+        }
+
+        // 2. Atualiza sessão (operação separada — não afeta o reply ao cliente)
+        try {
+          await prisma.aiConversation.update({
+            where: { id: aiConv.id },
+            data: {
+              status: reservationCreated ? 'COMPLETED' : 'ACTIVE',
+              history: toJson(newHistory),
+              collected: toJson(gemini.collected),
+              expiresAt: reservationCreated ? aiConv.expiresAt : new Date(Date.now() + SESSION_TIMEOUT_MS),
+            },
+          })
+        } catch (err) {
+          console.error('[AI] Erro ao atualizar sessão:', err)
+        }
+      } else {
+        console.error('[AI] readyToBook mas dados incompletos:', JSON.stringify(gemini.collected))
+        // Mantém sessão ativa para tentar novamente
+        try {
           await prisma.aiConversation.update({
             where: { id: aiConv.id },
             data: {
@@ -121,6 +142,8 @@ export async function processAiMessage(
               expiresAt: new Date(Date.now() + SESSION_TIMEOUT_MS),
             },
           })
+        } catch (err) {
+          console.error('[AI] Erro ao manter sessão ativa:', err)
         }
       }
     } else {
