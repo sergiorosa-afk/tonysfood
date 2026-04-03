@@ -6,7 +6,7 @@ import { getSegmentColors } from '@/lib/segment-colors'
 import {
   Users, Building2, UserCheck, Database,
   UtensilsCrossed, Bot, Webhook, Smartphone,
-  ChevronRight, PlusCircle, Settings, Tags,
+  ChevronRight, PlusCircle, Settings, Tags, CalendarOff,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -89,6 +89,17 @@ export default async function AdminPage() {
       countLabel: 'unidades',
       color: 'bg-indigo-100 text-indigo-600',
       accent: 'border-indigo-200 hover:border-indigo-400',
+    },
+    {
+      title: 'Bloqueios de Reserva',
+      description: 'Datas e horários em que reservas não são aceitas — a IA também é bloqueada',
+      icon: CalendarOff,
+      href: '/bloqueios',
+      hrefNew: '/bloqueios/novo',
+      count: null,
+      countLabel: null,
+      color: 'bg-red-100 text-red-600',
+      accent: 'border-red-200 hover:border-red-400',
     },
   ]
 

@@ -1,17 +1,28 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useState } from 'react'
+import { useFormState, useFormStatus } from 'react-dom'
 import { createBlock, BlockFormState } from '@/lib/actions/blocks'
 import { WEEKDAY_LABELS } from '@/lib/queries/blocks'
 
-const initialState: BlockFormState = {}
-
 const inputClass = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/30 bg-white'
 const labelClass = 'block text-sm font-medium text-slate-700 mb-1.5'
-const errorClass = 'text-xs text-red-600 mt-1'
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-60"
+    >
+      {pending ? 'Salvando...' : 'Criar Bloqueio'}
+    </button>
+  )
+}
 
 export function BlockForm({ unitId }: { unitId: string }) {
-  const [state, action, isPending] = useActionState(createBlock, initialState)
+  const [state, action] = useFormState(createBlock, {} as BlockFormState)
 
   // Controles de UI
   const [blockContent, setBlockContent] = useState<'allDay' | 'period' | 'timeRange'>('allDay')
@@ -22,6 +33,11 @@ export function BlockForm({ unitId }: { unitId: string }) {
 
   return (
     <form action={action} className="space-y-6">
+      {state.success && (
+        <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
+          {state.message}
+        </div>
+      )}
       <input type="hidden" name="unitId" value={unitId} />
 
       {/* Mensagem de erro global */}
@@ -175,13 +191,7 @@ export function BlockForm({ unitId }: { unitId: string }) {
         >
           Cancelar
         </a>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-60"
-        >
-          {isPending ? 'Salvando...' : 'Criar Bloqueio'}
-        </button>
+        <SubmitButton />
       </div>
     </form>
   )
