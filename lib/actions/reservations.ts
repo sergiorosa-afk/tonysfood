@@ -7,6 +7,50 @@ import { prisma } from '@/lib/db'
 import { emitEvent } from '@/lib/events'
 import { auth } from '@/lib/auth'
 import { normalizePhone, phoneVariants } from '@/lib/utils/phone'
+import { sendWaWebMessage, getWaWebStateForUnit } from '@/lib/whatsapp-web/service'
+
+function formatReservationConfirmationMessage(
+  guestName: string,
+  date: Date,
+  partySize: number,
+  notes?: string | null,
+): string {
+  // Railway é UTC; datas são salvas sem conversão de fuso, então getUTC* retorna o horário digitado
+  const day = date.getUTCDate().toString().padStart(2, '0')
+  const month = (date.getUTCMonth() + 1).toString().padStart(2, '0')
+  const year = date.getUTCFullYear()
+  const hours = date.getUTCHours().toString().padStart(2, '0')
+  const minutes = date.getUTCMinutes().toString().padStart(2, '0')
+
+  let msg =
+    `Olá, *${guestName}*! ✅\n\n` +
+    `Sua reserva no *Tony's Food* foi confirmada:\n\n` +
+    `📅 *${day}/${month}/${year}* às *${hours}:${minutes}*\n` +
+    `👥 *${partySize} pessoa${partySize > 1 ? 's' : ''}*`
+
+  if (notes) {
+    msg += `\n📝 ${notes}`
+  }
+
+  msg += `\n\nAguardamos você! 🍽️`
+  return msg
+}
+
+function sendReservationWhatsApp(
+  unitId: string,
+  phone: string,
+  guestName: string,
+  date: Date,
+  partySize: number,
+  notes?: string | null,
+) {
+  try {
+    const waState = getWaWebStateForUnit(unitId)
+    if (waState.status !== 'connected') return
+    const msg = formatReservationConfirmationMessage(guestName, date, partySize, notes)
+    sendWaWebMessage(unitId, phone, msg)
+  } catch { /* notificação não crítica */ }
+}
 
 const reservationSchema = z.object({
   guestName: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
@@ -101,6 +145,18 @@ export async function createReservation(
       })
     } catch { /* evento não crítico */ }
 
+    // Notificação WhatsApp se reserva já criada como CONFIRMED e tem telefone
+    if (parsed.data.status === 'CONFIRMED' && rest.guestPhone) {
+      sendReservationWhatsApp(
+        rest.unitId,
+        rest.guestPhone,
+        rest.guestName,
+        reservationDate,
+        rest.partySize,
+        rest.notes,
+      )
+    }
+
   } catch (error) {
     return { message: 'Erro ao criar reserva. Tente novamente.', success: false }
   }
@@ -161,6 +217,18 @@ export async function confirmReservation(id: string) {
     entityId: id,
     payload: { guestName: reservation.guestName },
   })
+
+  // Notificação WhatsApp para o cliente
+  if (reservation.guestPhone) {
+    sendReservationWhatsApp(
+      reservation.unitId,
+      reservation.guestPhone,
+      reservation.guestName,
+      reservation.date,
+      reservation.partySize,
+      reservation.notes,
+    )
+  }
 
   revalidatePath('/reservas')
   revalidatePath(`/reservas/${id}`)

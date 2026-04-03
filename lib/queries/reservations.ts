@@ -9,26 +9,31 @@ export type ReservationFilters = {
 }
 
 function getDateRange(date: ReservationFilters['date']) {
-  const now = new Date()
-  const startOfDay = new Date(now)
-  startOfDay.setHours(0, 0, 0, 0)
+  // Railway roda em UTC; Brasil é UTC-3 (sem horário de verão desde 2019).
+  // Computamos sempre relativo ao horário de Brasília para que "Hoje" e
+  // "Amanhã" correspondam ao dia local do restaurante.
+  const BR_OFFSET_MS = 3 * 60 * 60 * 1000 // 3h em ms
+
+  // Hora atual deslocada para o fuso de Brasília
+  const nowBR = new Date(Date.now() - BR_OFFSET_MS)
+
+  // Meia-noite do dia atual em Brasília
+  const startBR = new Date(nowBR)
+  startBR.setUTCHours(0, 0, 0, 0)
+
+  // Converte de volta para UTC para a query no banco
+  const startDay = new Date(startBR.getTime() + BR_OFFSET_MS)
+  const DAY_MS   = 86_400_000
 
   if (date === 'today') {
-    const end = new Date(startOfDay)
-    end.setDate(end.getDate() + 1)
-    return { gte: startOfDay, lt: end }
+    return { gte: startDay, lt: new Date(startDay.getTime() + DAY_MS) }
   }
   if (date === 'tomorrow') {
-    const start = new Date(startOfDay)
-    start.setDate(start.getDate() + 1)
-    const end = new Date(start)
-    end.setDate(end.getDate() + 1)
-    return { gte: start, lt: end }
+    const start = new Date(startDay.getTime() + DAY_MS)
+    return { gte: start, lt: new Date(start.getTime() + DAY_MS) }
   }
   if (date === 'week') {
-    const end = new Date(startOfDay)
-    end.setDate(end.getDate() + 7)
-    return { gte: startOfDay, lt: end }
+    return { gte: startDay, lt: new Date(startDay.getTime() + 7 * DAY_MS) }
   }
   return undefined
 }
