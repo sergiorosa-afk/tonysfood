@@ -75,8 +75,8 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const history = aiConv.history as HistoryMessage[]
-    const collected = aiConv.collected as CollectedData
+    const history = aiConv.history as unknown as HistoryMessage[]
+    const collected = aiConv.collected as unknown as CollectedData
 
     // Chama Gemini
     const gemini = await processWithGemini(history, message, collected)
