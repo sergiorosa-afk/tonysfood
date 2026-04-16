@@ -90,6 +90,7 @@ model Unit {
   webhooks           Webhook[]
   reservationBlocks  ReservationBlock[]
   mesas             Mesa[]
+  mesaGrupos        MesaGrupo[]
 
   @@map("units")
 }
@@ -182,6 +183,8 @@ model QueueEntry {
   mesaId        String?
   mesa          Mesa?                @relation(fields: [mesaId], references: [id])
   mesaNumero    Int?
+  mesaGrupoId   String?
+  mesaGrupo     MesaGrupo?           @relation(fields: [mesaGrupoId], references: [id])
   calledAt      DateTime?
   seatedAt      DateTime?
   abandonedAt   DateTime?
@@ -194,18 +197,49 @@ model QueueEntry {
 }
 
 model Mesa {
-  id         String       @id @default(cuid())
+  id         String          @id @default(cuid())
   unitId     String
-  unit       Unit         @relation(fields: [unitId], references: [id])
+  unit       Unit            @relation(fields: [unitId], references: [id])
   numero     Int
-  capacidade Int?
-  status     String       @default("LIVRE") // LIVRE, OCUPADA
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  capacidade Int             @default(4)
+  status     String          @default("LIVRE") // LIVRE, OCUPADA
+  posX       Int             @default(0)        // coluna no grid da planta
+  posY       Int             @default(0)        // linha no grid da planta
+  largura    Int             @default(1)        // células de largura no grid
+  altura     Int             @default(1)        // células de altura no grid
+  forma      String          @default("retangular") // retangular, redonda
+  ativo      Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
   queueEntries QueueEntry[]
+  grupos       MesaGrupoItem[]
 
   @@unique([unitId, numero])
   @@map("mesas")
+}
+
+model MesaGrupo {
+  id         String          @id @default(cuid())
+  unitId     String
+  unit       Unit            @relation(fields: [unitId], references: [id])
+  capacidade Int
+  status     String          @default("ATIVO") // ATIVO, DISSOLVIDO
+  criadoEm   DateTime        @default(now())
+  mesas      MesaGrupoItem[]
+  queueEntries QueueEntry[]
+
+  @@map("mesa_grupos")
+}
+
+model MesaGrupoItem {
+  id      String    @id @default(cuid())
+  grupoId String
+  grupo   MesaGrupo @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  mesaId  String
+  mesa    Mesa      @relation(fields: [mesaId], references: [id])
+
+  @@unique([grupoId, mesaId])
+  @@map("mesa_grupo_items")
 }
 
 model QueueStatusHistory {

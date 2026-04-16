@@ -101,6 +101,17 @@ export default async function AdminPage() {
       color: 'bg-red-100 text-red-600',
       accent: 'border-red-200 hover:border-red-400',
     },
+    {
+      title: 'Planta de Mesas',
+      description: 'Cadastre e posicione as mesas do salão para controle de ocupação',
+      icon: UtensilsCrossed,
+      href: '/admin/planta',
+      hrefNew: null,
+      count: null,
+      countLabel: null,
+      color: 'bg-amber-100 text-amber-600',
+      accent: 'border-amber-200 hover:border-amber-400',
+    },
   ]
 
   return (
