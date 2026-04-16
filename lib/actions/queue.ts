@@ -142,39 +142,57 @@ export async function joinQueue(
   return { success: true, message: 'Adicionado à fila com sucesso.' }
 }
 
-export async function callGuest(id: string) {
+export async function callGuest(id: string, mesaNumero: number) {
   const session = await auth()
   if (!session) throw new Error('Não autorizado')
+
+  // Busca unitId antes de atualizar
+  const existing = await prisma.queueEntry.findUnique({
+    where: { id },
+    select: { unitId: true },
+  })
+  if (!existing) throw new Error('Entrada não encontrada')
+
+  // Find-or-create Mesa e marca como OCUPADA
+  const mesa = await prisma.mesa.upsert({
+    where: { unitId_numero: { unitId: existing.unitId, numero: mesaNumero } },
+    create: { unitId: existing.unitId, numero: mesaNumero, status: 'OCUPADA' },
+    update: { status: 'OCUPADA' },
+  })
 
   const entry = await prisma.queueEntry.update({
     where: { id },
     data: {
       status: 'CALLED',
       calledAt: new Date(),
-      statusHistory: { create: { status: 'CALLED', notes: 'Chamado para a mesa' } },
+      mesaId: mesa.id,
+      mesaNumero,
+      statusHistory: { create: { status: 'CALLED', notes: `Chamado para a Mesa ${mesaNumero}` } },
     },
   })
 
-  // Send WhatsApp message if connected and guest has phone
+  // Send WhatsApp message com número da mesa
   if (entry.guestPhone) {
     const waState = getWaWebStateForUnit(entry.unitId)
     if (waState.status === 'connected') {
       const msg =
         `Olá, *${entry.guestName}*! 🍽️\n\n` +
-        `Sua mesa está pronta! Por favor, dirija-se à recepção.\n\n` +
+        `Sua mesa está pronta! Por favor, dirija-se à *Mesa ${mesaNumero}*.\n\n` +
         `Grupo: *${entry.partySize} pessoa${entry.partySize !== 1 ? 's' : ''}*\n\n` +
         `_Tony's Food — Obrigado pela paciência!_`
       sendWaWebMessage(entry.unitId, entry.guestPhone, msg)
     }
   }
 
-  await emitEvent({
-    unitId: entry.unitId,
-    eventType: 'QUEUE_CALLED',
-    entityType: 'queue_entry',
-    entityId: id,
-    payload: { guestName: entry.guestName, partySize: entry.partySize },
-  })
+  try {
+    await emitEvent({
+      unitId: entry.unitId,
+      eventType: 'QUEUE_CALLED',
+      entityType: 'queue_entry',
+      entityId: id,
+      payload: { guestName: entry.guestName, partySize: entry.partySize, mesaNumero },
+    })
+  } catch { /* evento não crítico */ }
 
   revalidatePath('/fila')
   revalidatePath('/dashboard')
@@ -218,6 +236,16 @@ export async function abandonQueue(id: string, reason?: string) {
       statusHistory: { create: { status: 'ABANDONED', notes: reason || 'Desistiu da fila' } },
     },
   })
+
+  // Libera a mesa se havia uma alocada (cliente desistiu após ser chamado)
+  if (entry.mesaId) {
+    try {
+      await prisma.mesa.update({
+        where: { id: entry.mesaId },
+        data: { status: 'LIVRE' },
+      })
+    } catch { /* não crítico */ }
+  }
 
   // Reorder remaining entries
   await reorderQueue(entry.unitId, entry.position)

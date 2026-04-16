@@ -89,6 +89,7 @@ model Unit {
   integrations       Integration[]
   webhooks           Webhook[]
   reservationBlocks  ReservationBlock[]
+  mesas             Mesa[]
 
   @@map("units")
 }
@@ -178,6 +179,9 @@ model QueueEntry {
   channel       String               @default("IN_PERSON")
   notes         String?              @db.Text
   estimatedWait Int?
+  mesaId        String?
+  mesa          Mesa?                @relation(fields: [mesaId], references: [id])
+  mesaNumero    Int?
   calledAt      DateTime?
   seatedAt      DateTime?
   abandonedAt   DateTime?
@@ -187,6 +191,21 @@ model QueueEntry {
   statusHistory QueueStatusHistory[]
 
   @@map("queue_entries")
+}
+
+model Mesa {
+  id         String       @id @default(cuid())
+  unitId     String
+  unit       Unit         @relation(fields: [unitId], references: [id])
+  numero     Int
+  capacidade Int?
+  status     String       @default("LIVRE") // LIVRE, OCUPADA
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  queueEntries QueueEntry[]
+
+  @@unique([unitId, numero])
+  @@map("mesas")
 }
 
 model QueueStatusHistory {
