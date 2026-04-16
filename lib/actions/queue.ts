@@ -142,42 +142,77 @@ export async function joinQueue(
   return { success: true, message: 'Adicionado à fila com sucesso.' }
 }
 
-export async function callGuest(id: string, mesaNumero: number) {
+export async function callGuest(
+  id: string,
+  mesaNumero: number,
+  mesaId?: string,
+  mesaGrupoId?: string,
+  numerosGrupo?: number[],
+) {
   const session = await auth()
   if (!session) throw new Error('Não autorizado')
 
-  // Busca unitId antes de atualizar
   const existing = await prisma.queueEntry.findUnique({
     where: { id },
     select: { unitId: true },
   })
   if (!existing) throw new Error('Entrada não encontrada')
 
-  // Find-or-create Mesa e marca como OCUPADA
-  const mesa = await prisma.mesa.upsert({
-    where: { unitId_numero: { unitId: existing.unitId, numero: mesaNumero } },
-    create: { unitId: existing.unitId, numero: mesaNumero, status: 'OCUPADA' },
-    update: { status: 'OCUPADA' },
-  })
+  let resolvedMesaId = mesaId
+
+  if (resolvedMesaId) {
+    // Mesa já conhecida (seleção visual) — apenas marca como OCUPADA
+    await prisma.mesa.update({ where: { id: resolvedMesaId }, data: { status: 'OCUPADA' } })
+  } else {
+    // Fallback: find-or-create pelo número (input de texto legado)
+    const mesa = await prisma.mesa.upsert({
+      where: { unitId_numero: { unitId: existing.unitId, numero: mesaNumero } },
+      create: { unitId: existing.unitId, numero: mesaNumero, status: 'OCUPADA' },
+      update: { status: 'OCUPADA' },
+    })
+    resolvedMesaId = mesa.id
+  }
+
+  // Se for grupo: marca todas as mesas do grupo como OCUPADA
+  if (mesaGrupoId) {
+    const grupo = await prisma.mesaGrupo.findUnique({
+      where: { id: mesaGrupoId },
+      include: { mesas: true },
+    })
+    if (grupo) {
+      const mesaIdsGrupo = grupo.mesas.map((gi) => gi.mesaId)
+      await prisma.mesa.updateMany({ where: { id: { in: mesaIdsGrupo } }, data: { status: 'OCUPADA' } })
+    }
+  }
+
+  // Monta label de mesa(s) para a mensagem
+  const mesaLabel = numerosGrupo && numerosGrupo.length > 1
+    ? `Mesas ${numerosGrupo.join(' e ')}`
+    : `Mesa ${mesaNumero}`
+
+  const notesLabel = numerosGrupo && numerosGrupo.length > 1
+    ? `Chamado para as Mesas ${numerosGrupo.join(' e ')}`
+    : `Chamado para a Mesa ${mesaNumero}`
 
   const entry = await prisma.queueEntry.update({
     where: { id },
     data: {
       status: 'CALLED',
       calledAt: new Date(),
-      mesaId: mesa.id,
+      mesaId: resolvedMesaId,
       mesaNumero,
-      statusHistory: { create: { status: 'CALLED', notes: `Chamado para a Mesa ${mesaNumero}` } },
+      mesaGrupoId: mesaGrupoId ?? null,
+      statusHistory: { create: { status: 'CALLED', notes: notesLabel } },
     },
   })
 
-  // Send WhatsApp message com número da mesa
+  // WhatsApp com número(s) da(s) mesa(s)
   if (entry.guestPhone) {
     const waState = getWaWebStateForUnit(entry.unitId)
     if (waState.status === 'connected') {
       const msg =
         `Olá, *${entry.guestName}*! 🍽️\n\n` +
-        `Sua mesa está pronta! Por favor, dirija-se à *Mesa ${mesaNumero}*.\n\n` +
+        `Sua mesa está pronta! Por favor, dirija-se à *${mesaLabel}*.\n\n` +
         `Grupo: *${entry.partySize} pessoa${entry.partySize !== 1 ? 's' : ''}*\n\n` +
         `_Tony's Food — Obrigado pela paciência!_`
       sendWaWebMessage(entry.unitId, entry.guestPhone, msg)
@@ -190,11 +225,12 @@ export async function callGuest(id: string, mesaNumero: number) {
       eventType: 'QUEUE_CALLED',
       entityType: 'queue_entry',
       entityId: id,
-      payload: { guestName: entry.guestName, partySize: entry.partySize, mesaNumero },
+      payload: { guestName: entry.guestName, partySize: entry.partySize, mesaNumero, mesaGrupoId },
     })
   } catch { /* evento não crítico */ }
 
   revalidatePath('/fila')
+  revalidatePath('/mesas')
   revalidatePath('/dashboard')
 }
 

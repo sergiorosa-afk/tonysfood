@@ -79,7 +79,7 @@ export default async function FilaPage() {
               </h2>
               <div className="space-y-3">
                 {called.map((entry) => (
-                  <QueueEntryCard key={entry.id} entry={entry as any} />
+                  <QueueEntryCard key={entry.id} entry={{ ...entry, unitId: unitId ?? '' } as any} />
                 ))}
               </div>
             </div>
@@ -103,7 +103,7 @@ export default async function FilaPage() {
             ) : (
               <div className="space-y-3">
                 {waiting.map((entry) => (
-                  <QueueEntryCard key={entry.id} entry={entry as any} />
+                  <QueueEntryCard key={entry.id} entry={{ ...entry, unitId: unitId ?? '' } as any} />
                 ))}
               </div>
             )}
