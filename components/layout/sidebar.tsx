@@ -13,6 +13,7 @@ import {
   Plug,
   ShieldCheck,
   CalendarOff,
+  UtensilsCrossed,
 } from 'lucide-react'
 import { cn, getInitials, roleLabels } from '@/lib/utils'
 
@@ -20,6 +21,7 @@ const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Reservas', href: '/reservas', icon: CalendarDays },
   { label: 'Fila', href: '/fila', icon: Users },
+  { label: 'Mesas', href: '/mesas', icon: UtensilsCrossed },
   { label: 'Inbox', href: '/inbox', icon: MessageSquare },
   { label: 'Clientes', href: '/clientes', icon: UserCircle },
   { label: 'Catálogo', href: '/catalogo', icon: BookOpen },
