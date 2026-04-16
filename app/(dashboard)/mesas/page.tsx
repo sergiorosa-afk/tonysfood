@@ -117,6 +117,7 @@ export default async function MesasPage() {
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <PlantaMesas
+            unitId={unit.id}
             mesas={mesas.map((m) => ({
               id:          m.id,
               numero:      m.numero,
