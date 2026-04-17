@@ -8,11 +8,12 @@ import type { MesaData } from './mesa-card-editor'
 type Props = {
   unitId: string
   existingNumbers: number[]
+  initialPos?: { posX: number; posY: number }
   onAdded: (mesa: MesaData) => void
   onClose: () => void
 }
 
-export function AddMesaPanel({ unitId, existingNumbers, onAdded, onClose }: Props) {
+export function AddMesaPanel({ unitId, existingNumbers, initialPos, onAdded, onClose }: Props) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState('')
 
@@ -44,8 +45,8 @@ export function AddMesaPanel({ unitId, existingNumbers, onAdded, onClose }: Prop
     fd.append('forma', form.forma)
     fd.append('largura', String(form.largura))
     fd.append('altura', String(form.altura))
-    fd.append('posX', '0')
-    fd.append('posY', '0')
+    fd.append('posX', String(initialPos?.posX ?? 0))
+    fd.append('posY', String(initialPos?.posY ?? 0))
 
     startTransition(async () => {
       const result = await createMesa({ success: false }, fd)
@@ -55,8 +56,8 @@ export function AddMesaPanel({ unitId, existingNumbers, onAdded, onClose }: Prop
           id: Date.now().toString(), // temporário, página vai refresh
           ...form,
           status: 'LIVRE',
-          posX: 0,
-          posY: 0,
+          posX: initialPos?.posX ?? 0,
+          posY: initialPos?.posY ?? 0,
         }
         onAdded(nova)
       } else {
@@ -130,7 +131,7 @@ export function AddMesaPanel({ unitId, existingNumbers, onAdded, onClose }: Prop
         </div>
 
         <p className="text-[11px] text-slate-400">
-          A mesa será criada na posição (0,0). Arraste no grid para posicionar.
+          A mesa será criada na primeira posição livre do grid. Arraste para reposicionar.
         </p>
 
         {error && <p className="text-xs text-red-600">{error}</p>}

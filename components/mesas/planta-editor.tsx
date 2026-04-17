@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useCallback } from 'react'
+import { useState, useTransition, useCallback, useEffect } from 'react'
 import {
   DndContext,
   DragEndEvent,
@@ -25,9 +25,24 @@ type Props = {
   unitId: string
 }
 
+function findFreePosition(mesas: MesaData[]): { posX: number; posY: number } {
+  const occupied = new Set(mesas.map((m) => `${m.posX},${m.posY}`))
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (!occupied.has(`${x},${y}`)) return { posX: x, posY: y }
+    }
+  }
+  return { posX: 0, posY: 0 }
+}
+
 export function PlantaEditor({ initialMesas, unitId }: Props) {
   const router = useRouter()
   const [mesas, setMesas] = useState<MesaData[]>(initialMesas)
+
+  // Sincroniza estado local com dados do servidor após router.refresh()
+  useEffect(() => {
+    setMesas(initialMesas)
+  }, [initialMesas])
   const [selectedMesa, setSelectedMesa] = useState<MesaData | null>(null)
   const [activeDrag, setActiveDrag] = useState<MesaData | null>(null)
   const [showAddPanel, setShowAddPanel] = useState(false)
@@ -237,6 +252,7 @@ export function PlantaEditor({ initialMesas, unitId }: Props) {
               <AddMesaPanel
                 unitId={unitId}
                 existingNumbers={mesas.map((m) => m.numero)}
+                initialPos={findFreePosition(mesas)}
                 onAdded={handleMesaAdded}
                 onClose={() => setShowAddPanel(false)}
               />
